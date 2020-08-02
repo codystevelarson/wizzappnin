@@ -2,6 +2,7 @@ const port = 8000;
 const webSocketServer = require('websocket').server;
 const http = require('http');
 const { getuid } = require('process');
+const { client } = require('websocket');
 
 // Create server
 const server = http.createServer();
@@ -37,15 +38,17 @@ wsServer.on('request', (request) => {
   );
 
   const connection = request.accept(null, request.origin);
+  connectionMessage = JSON.stringify({ uid: userId });
+  connection.sendUTF(connectionMessage);
 
   clients[userId] = connection;
-  console.log(
-    `[connected] :: ${userId} in ${Object.getOwnPropertyNames(clients)}`
-  );
+  console.log(`::[Connected User]::  ${userId}`);
+  console.log(`::[Users Connected]::`, Object.getOwnPropertyNames(clients));
 
   connection.on('message', (message) => {
     if (message.type == 'utf8') {
-      console.log(`Received Message ${message.utf8Data}`);
+      console.log('Message', message);
+      console.log(`Received Message :: ${message.utf8Data}`);
 
       // Send to all clients
       for (key in clients) {
@@ -53,5 +56,12 @@ wsServer.on('request', (request) => {
         console.log(`Sent message to: ${clients[key]}`);
       }
     }
+  });
+
+  connection.on('close', (reasonCode, description) => {
+    delete clients[userId];
+    console.log(
+      `[${new Date()}] :: Peer ${connection.remoteAddress} disconnected.`
+    );
   });
 });
