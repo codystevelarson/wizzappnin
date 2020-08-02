@@ -1,0 +1,12 @@
+{
+  "name": "wizzappin",
+  "version": "1.0.0",
+  "scripts": {
+    "test": "echo 'ERROR: YOU ARE BEING HACKED!' && exit 69",
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "http": "0.0.1-security",
+    "websocket": "^1.0.31"
+  }
+}
