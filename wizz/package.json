@@ -6,6 +6,7 @@
     "start": "node index.js"
   },
   "dependencies": {
+    "git": "^0.1.5",
     "http": "0.0.1-security",
     "websocket": "^1.0.31"
   }

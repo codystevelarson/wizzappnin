@@ -2,126 +2,220 @@ import React, { Component } from 'react';
 import './App.css';
 
 import { w3cwebsocket as W3CWebSocket } from 'websocket';
-
-import { Card, Avatar, Input, Typography } from 'antd';
+import { Tag } from 'antd';
 import 'antd/dist/antd.css';
+
+import Login from './components/Login/Login';
+import ChatBox from './components/ChatBox/ChatBox';
+import Banner from './components/Banner/Banner';
 
 export default class App extends Component {
   state = {
-    client: null,
+    userId: 0,
     userName: '',
     isLoggedIn: false,
     messages: [],
     message: '',
-    uid: 'DISCONNECTED',
+    connectionId: 'DISCONNECTED',
+    onlineUsers: [],
+    toUsers: []
   };
 
-  componentWillMount() {
-    this.setState({ client: new W3CWebSocket('ws://localhost:8000') });
-  }
+  client = new W3CWebSocket('ws://localhost:8000');
+
 
   componentDidMount() {
-    this.state.client.onopen = (event) => {
-      console.log(event);
-      console.log(`Websocket client connected`);
-    };
+    // Open the connection
+    this.client.onopen = this.socketOpenHandler;
 
-    this.state.client.onmessage = (message) => {
-      const dataFromServer = JSON.parse(message.data);
-      console.log(`[SERVER] :: `, dataFromServer);
+    // Setup connection events
+    // On Message from the server
+    this.client.onmessage = this.socketMessageHandler;
 
-      if (dataFromServer.uid) {
-        console.log(dataFromServer);
-        this.setConnection(dataFromServer.uid);
-        return;
-      }
-
-      this.setState({
-        messages: [
-          ...this.state.messages,
-          { msg: dataFromServer.msg, user: dataFromServer.user },
-        ],
-      });
-    };
-
-    this.state.client.onclose = () => {
-      this.setState({ uid: 'DISCONNECTED' });
-    };
+    // When connection is closed
+    this.client.onclose = this.socketCloseHandler;
   }
 
+  // Set connection
+  setConnection = (connectionId) => {
+    this.setState({ connectionId });
+  };
+
+
+  // Login Function
+  onLoginHandler = (value) => {
+    if (!value)
+      return;
+
+    let id = value === 'admin' ? 99 : 5;
+
+    let user = {
+      isLoggedIn: true, userName: value, userId: id
+    }
+
+    this.setState(user);
+
+    this.sendUserData(user);
+  }
+
+
+  sendUserData = (user) => {
+    this.client.send(
+      JSON.stringify({
+        type: 'loadUser',
+        user: {
+          cid: this.state.connectionId,
+          id: user.userId,
+          un: user.userName
+        },
+      })
+    );
+  }
+
+  updateUserList = (users) => {
+    this.setState({ onlineUsers: users });
+  }
+
+  addToUser = (user) => {
+    let idx = this.state.toUsers.indexOf(user);
+    if (idx === -1) {
+
+      this.setState(state => {
+        const newList = [...state.toUsers, user];
+        return { toUsers: newList }
+      });
+    }
+    else {
+      this.setState(state => {
+        let toUsers = state.toUsers.filter((item, i) => i !== idx);
+        return { toUsers }
+      });
+    }
+  }
+
+  clearToUsers = () => {
+    this.setState({ toUsers: [] })
+  }
+
+
+  // Send Message Function
   sendButtonHandler = () => {
-    this.state.client.send(
+    if (!this.state.message)
+      return;
+
+    this.client.send(
       JSON.stringify({
         type: 'message',
         msg: this.state.message,
         user: this.state.userName,
-        to: 69420,
+        from: this.state.connectionId,
+        to: this.state.toUsers, // use to send to specific user
       })
     );
     this.setState({ message: '' });
   };
 
+  // Message Input 
   messageChangeHandler = (e) => {
-    console.log(e);
     this.setState({ message: e.target.value });
   };
 
-  setConnection = (connection) => {
-    this.setState({ uid: connection });
+
+  //////
+  // Socket Event Methods
+  //////
+  socketOpenHandler = (event) => {
+    console.log(`Websocket client connected`);
+
   };
+
+  socketCloseHandler = () => {
+    // Wipe connection ID
+    this.setState({ connectionId: 'DISCONNECTED' });
+  };
+
+  socketMessageHandler = (message) => {
+    //Parse message
+    const dataFromServer = JSON.parse(message.data);
+    console.log(`[SERVER] :: `, dataFromServer);
+
+    // IF CONNECTION SUCCESS MESSAGE
+    if (dataFromServer.connectionId) {
+      // Save connection ID
+      this.setConnection(dataFromServer.connectionId);
+      this.updateUserList(dataFromServer.users);
+      return;
+    }
+
+    if (dataFromServer.userList) {
+      this.updateUserList(dataFromServer.userList);
+      return;
+    }
+
+    // Add messages to state
+    this.setState({
+      messages: [
+        ...this.state.messages,
+        { msg: dataFromServer.msg, user: dataFromServer.user },
+      ],
+    });
+  };
+  //////
+
+
 
   render() {
     let display = null;
-    let messages = this.state.messages.map((m, idx) => (
-      <div
-        className={
-          m.user === this.state.userName
-            ? 'card-message self'
-            : 'card-message user'
-        }
-      >
-        <Card key={idx} title={m.user} extra={<a href='x'>...</a>}>
-          <p>{m.msg}</p>
-        </Card>
-      </div>
-    ));
 
-    let greeting = <h2 className='greeting'>wizzappnin</h2>;
+
+    let greeting = <Banner info={this.state.connectionId} main="W!ZZ@PPN!N"></Banner>;
 
     if (this.state.isLoggedIn) {
-      console.log(messages);
-      greeting = <h3 className='greeting'>Hey {this.state.userName}</h3>;
+      greeting = <Banner info={this.state.connectionId} main={"Hi " + this.state.userName}></Banner >;
+
+      let userList = null;
+      console.log(this.state.toUsers)
+      if (this.state.onlineUsers && this.state.onlineUsers.filter((u, i) => u.cid !== this.state.connectionId).length) {
+        userList =
+          this.state.onlineUsers.filter((u, i) => u.cid !== this.state.connectionId).map((user, idx) => (
+            <Tag key={idx}
+              color={this.state.toUsers.find(u => u.cid === user.cid) ? 'processing' : 'default'}
+              onClick={() => this.addToUser(user)}>
+              {user.un}
+            </Tag>
+          ))
+      } else {
+        userList = <div className='empty-list'>None</div>
+      }
+
       display = (
         <div>
-          <Input.Search
-            placeholder='Say Something...'
-            enterButton='Send'
-            size='large'
-            value={this.state.message}
-            onChange={(event) => this.messageChangeHandler(event)}
-            onSearch={() => this.sendButtonHandler()}
+          <div className="user-list">
+            <h4>Online Users:</h4>
+            {userList}
+          </div>
+          <ChatBox
+            user={this.state.userName}
+            to={this.state.toUsers}
+            message={this.state.message}
+            messages={this.state.messages}
+            changeHandler={this.messageChangeHandler}
+            sendHandler={this.sendButtonHandler}
+            clearTo={this.clearToUsers}
           />
-          <div className='message-container'>{messages}</div>
         </div>
+
       );
     } else {
       display = (
-        <div style={{ padding: '200px 40px' }}>
-          <Input.Search
-            placeholder='Enter Username'
-            enterButton='Login'
-            size='large'
-            onSearch={(value) =>
-              this.setState({ isLoggedIn: true, userName: value })
-            }
-          />
-        </div>
+        <Login onLogin={this.onLoginHandler} />
       );
     }
 
+
+
     return (
       <div className='main'>
-        {this.state.uid}
         {greeting}
         {display}
       </div>
